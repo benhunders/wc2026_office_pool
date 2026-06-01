@@ -1391,7 +1391,7 @@ async function loadAdminSubs(){
   if(!el) return;
   if(demoMode||!db){el.innerHTML=`<p class="text-muted" style="padding:12px">No Supabase connection.</p>`;return}
   try{
-    const {data,error}=await db.from('predictions').select('name,email,champion,score,created_at').order('score',{ascending:false});
+    const {data,error}=await db.from('predictions').select('id,name,email,champion,score,created_at').order('score',{ascending:false});
     if(error) throw error;
     if(!data||data.length===0){el.innerHTML=`<p class="text-muted" style="padding:12px">No submissions yet.</p>`;return}
     const rows=data.map((p,i)=>{
@@ -1399,13 +1399,25 @@ async function loadAdminSubs(){
       return `<tr><td>${i+1}</td><td><strong>${esc(p.name)}</strong></td><td>${esc(p.email)}</td>
         <td><span class="score-pill${p.score===0?' zero':''}">${p.score}</span></td>
         <td>${getFlag(p.champion)} ${esc(p.champion||'—')}</td>
-        <td class="text-muted" style="font-size:12px">${d}</td></tr>`;
+        <td class="text-muted" style="font-size:12px">${d}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="deleteParticipant('${esc(p.id)}','${esc(p.name)}')">🗑 Delete</button></td></tr>`;
     }).join('');
     el.innerHTML=`<div class="lb-wrap"><table class="lb-table">
-      <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Score</th><th>Champion</th><th>Submitted</th></tr></thead>
+      <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Score</th><th>Champion</th><th>Submitted</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>
       <p style="margin-top:8px;font-size:12px;color:var(--muted)">${data.length} total</p>`;
   }catch(e){el.innerHTML=`<div class="alert alert-error">Error: ${esc(e.message)}</div>`}
+}
+
+async function deleteParticipant(id, name){
+  if(!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+  try{
+    const {error}=await db.from('predictions').delete().eq('id',id);
+    if(error) throw error;
+    loadAdminSubs();
+  }catch(e){
+    alert('Error deleting: '+e.message);
+  }
 }
 
 /* ════════════════════════════════════
