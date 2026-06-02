@@ -458,6 +458,10 @@ function isDeadlinePassed(){return new Date()>DEADLINE}
 /* ════════════════════════════════════
    STATE
 ════════════════════════════════════ */
+// ── Hardcoded credentials (fill these in so all visitors connect automatically) ──
+const APP_SUPABASE_URL = 'https://sccsxwixhkptnvriqtli.supabase.co';
+const APP_SUPABASE_KEY = 'sb_publishable_lak2Rv8EwlCpgC4CL6G8-w_twj6SdB7';
+
 let db=null, demoMode=false, adminOpen=false, setupUnlocked=false;
 let roundsCache={};  // roundId -> round row from DB
 
@@ -481,11 +485,10 @@ window._adminGR={};
    INIT
 ════════════════════════════════════ */
 function init(){
-  const url=localStorage.getItem('wc26_url');
-  const key=localStorage.getItem('wc26_key');
-  if(url&&key){try{db=window.supabase.createClient(url,key)}catch(e){console.error(e)}}
+  const url=APP_SUPABASE_URL||localStorage.getItem('wc26_url');
+  const key=APP_SUPABASE_KEY||localStorage.getItem('wc26_key');
+  if(url&&key){try{db=window.supabase.createClient(url,key);demoMode=false;}catch(e){console.error(e)}}
   updateDeadlineBanner();
-  if(!url||!key) showSetupModal(true);
   render();
 }
 
