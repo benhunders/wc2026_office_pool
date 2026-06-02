@@ -466,14 +466,14 @@ let roundsCache={};  // roundId -> round row from DB
 
 let state={
   view:'wizard', step:1,
-  name:'', email:'',
+  name:'', email:'', emailHash:'',
   groupPicks:Object.fromEntries(GK.map(g=>[g,[]])),
   champion:'', runnerUp:'', topScorer:'',
   existingId:null
 };
 
 let kState={
-  name:'', email:'', predId:null,
+  name:'', email:'', emailHash:'', predId:null,
   picks:{r32:[],r16:[],qf:[],sf:[]},
   loaded:false
 };
@@ -650,10 +650,11 @@ async function step1Next(){
   document.getElementById('inp-name').classList.remove('err');
   document.getElementById('inp-email').classList.remove('err');
   state.name=name; state.email=email; msg.innerHTML='';
+  state.emailHash=await hashEmail(email);
   if(db&&!demoMode){
     msg.innerHTML=`<div class="alert alert-info flex-center"><span class="spinner spinner-dark"></span>&nbsp; Checking for existing picks…</div>`;
     try{
-      const {data}=await db.from('predictions').select('*').eq('email',email).maybeSingle();
+      const {data}=await db.from('predictions').select('*').eq('email',state.emailHash).maybeSingle();
       if(data){
         state.existingId=data.id;
         if(data.group_picks&&Object.keys(data.group_picks).length) state.groupPicks=data.group_picks;
@@ -798,7 +799,7 @@ async function doSubmit(){
   const btn=document.getElementById('btn-submit');
   const msg=document.getElementById('s4msg');
   btn.disabled=true; btn.innerHTML=`<span class="spinner"></span>&nbsp;Saving…`;
-  const payload={name:state.name,email:state.email,group_picks:state.groupPicks,
+  const payload={name:state.name,email:state.emailHash,group_picks:state.groupPicks,
     champion:state.champion,runner_up:state.runnerUp,top_scorer:state.topScorer};
   if(demoMode||!db){await delay(700);state.step=5;renderWizard();return}
   try{
@@ -810,7 +811,7 @@ async function doSubmit(){
       error=res.error;
       if(!error&&res.data) state.existingId=res.data.id;
       if(error&&error.code==='23505'){
-        const up=await db.from('predictions').update(payload).eq('email',state.email);
+        const up=await db.from('predictions').update(payload).eq('email',state.emailHash);
         error=up.error;
       }
     }
@@ -840,19 +841,20 @@ async function renderKnockout(){
   }
 
   // Auto-load picks if email known
-  if((kState.email||state.email)&&!kState.loaded){
+  if((kState.emailHash||state.emailHash)&&!kState.loaded){
     kState.email=kState.email||state.email;
+    kState.emailHash=kState.emailHash||state.emailHash;
     kState.name=kState.name||state.name;
-    await loadKnockoutPicks(kState.email, el);
+    await loadKnockoutPicks(kState.emailHash, el);
   }
 
   buildKnockoutUI(el);
 }
 
-async function loadKnockoutPicks(email, el){
-  if(!db||demoMode||!email) return;
+async function loadKnockoutPicks(emailHash, el){
+  if(!db||demoMode||!emailHash) return;
   try{
-    const {data}=await db.from('predictions').select('id,name,knockout_picks').eq('email',email).maybeSingle();
+    const {data}=await db.from('predictions').select('id,name,knockout_picks').eq('email',emailHash).maybeSingle();
     if(data){
       kState.predId=data.id;
       if(data.name) kState.name=data.name;
@@ -936,7 +938,8 @@ async function koEmailLoad(){
   kState.email=email; kState.loaded=false; kState.predId=null;
   kState.picks={r32:[],r16:[],qf:[],sf:[]};
   msg.innerHTML=`<div class="flex-center"><span class="spinner spinner-dark"></span>&nbsp;Loading…</div>`;
-  await loadKnockoutPicks(email, null);
+  kState.emailHash=await hashEmail(email);
+  await loadKnockoutPicks(kState.emailHash, null);
   buildKnockoutUI(document.getElementById('view-knockout'));
 }
 
@@ -1024,11 +1027,11 @@ async function saveKnockoutPicks(){
     btn.disabled=false; btn.innerHTML='💾 Save Knockout Picks'; return;
   }
 
-  const email=kState.email||state.email;
+  const emailHash=kState.emailHash||state.emailHash;
   try{
     // Find or create prediction row
     if(!kState.predId){
-      const {data:existing}=await db.from('predictions').select('id').eq('email',email).maybeSingle();
+      const {data:existing}=await db.from('predictions').select('id').eq('email',emailHash).maybeSingle();
       if(existing) kState.predId=existing.id;
     }
     if(kState.predId){
@@ -1036,8 +1039,8 @@ async function saveKnockoutPicks(){
       if(error) throw error;
     } else {
       // Create minimal row
-      const name=kState.name||state.name||email.split('@')[0];
-      const res=await db.from('predictions').insert({name,email,knockout_picks:kState.picks}).select('id').single();
+      const name=kState.name||state.name||'Participant';
+      const res=await db.from('predictions').insert({name,email:emailHash,knockout_picks:kState.picks}).select('id').single();
       if(res.error) throw res.error;
       if(res.data) kState.predId=res.data.id;
     }
@@ -1435,19 +1438,19 @@ async function loadAdminSubs(){
   if(!el) return;
   if(demoMode||!db){el.innerHTML=`<p class="text-muted" style="padding:12px">No Supabase connection.</p>`;return}
   try{
-    const {data,error}=await db.from('predictions').select('id,name,email,champion,score,created_at').order('score',{ascending:false});
+    const {data,error}=await db.from('predictions').select('id,name,champion,score,created_at').order('score',{ascending:false});
     if(error) throw error;
     if(!data||data.length===0){el.innerHTML=`<p class="text-muted" style="padding:12px">No submissions yet.</p>`;return}
     const rows=data.map((p,i)=>{
       const d=p.created_at?new Date(p.created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'';
-      return `<tr><td>${i+1}</td><td><strong>${esc(p.name)}</strong></td><td>${esc(p.email)}</td>
+      return `<tr><td>${i+1}</td><td><strong>${esc(p.name)}</strong></td>
         <td><span class="score-pill${p.score===0?' zero':''}">${p.score}</span></td>
         <td>${getFlag(p.champion)} ${esc(p.champion||'—')}</td>
         <td class="text-muted" style="font-size:12px">${d}</td>
         <td><button class="btn btn-danger btn-sm" onclick="deleteParticipant('${esc(p.id)}','${esc(p.name)}')">🗑 Delete</button></td></tr>`;
     }).join('');
     el.innerHTML=`<div class="lb-wrap"><table class="lb-table">
-      <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Score</th><th>Champion</th><th>Submitted</th><th></th></tr></thead>
+      <thead><tr><th>#</th><th>Name</th><th>Score</th><th>Champion</th><th>Submitted</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>
       <p style="margin-top:8px;font-size:12px;color:var(--muted)">${data.length} total</p>`;
   }catch(e){el.innerHTML=`<div class="alert alert-error">Error: ${esc(e.message)}</div>`}
@@ -1493,6 +1496,11 @@ function calcScore(pred, results){
 /* ════════════════════════════════════
    HELPERS
 ════════════════════════════════════ */
+async function hashEmail(email){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(email.toLowerCase().trim()));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
 function esc(s){
   if(s==null) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
