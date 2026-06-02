@@ -395,7 +395,6 @@ CREATE POLICY "rounds_update" ON rounds      FOR UPDATE  TO anon USING (true);</
       <h1>WC 2026 — Prediction Challenge</h1>
       <p>Nouryon Colleagues · June 11 – July 19, 2026 · USA · Canada · Mexico</p>
     </div>
-    <button class="header-setup-btn" onclick="showSetupModal()">⚙️ Setup</button>
   </div>
   <div id="deadline-bar" class="deadline-bar"></div>
 </header>
@@ -1199,6 +1198,31 @@ async function loadAdminPanel(){
       <div class="card-title">All Submissions</div>
       <div id="admin-subs"><div class="flex-center" style="padding:20px">
         <span class="spinner spinner-dark"></span>&nbsp;Loading…</div></div>
+    </div>
+
+    <!-- Connection Settings -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">Connection Settings</div>
+      <p class="card-sub">Update Supabase credentials or change the admin password.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="fg" style="margin-bottom:0">
+          <label>Supabase Project URL</label>
+          <input class="fi" id="as-url" type="text" placeholder="https://xxxxxxxxxx.supabase.co"
+            value="${esc(localStorage.getItem('wc26_url')||APP_SUPABASE_URL)}"/>
+        </div>
+        <div class="fg" style="margin-bottom:0">
+          <label>Anon Public Key</label>
+          <input class="fi" id="as-key" type="text" placeholder="eyJhbGci…"
+            value="${esc(localStorage.getItem('wc26_key')||APP_SUPABASE_KEY)}"/>
+        </div>
+      </div>
+      <div class="fg" style="margin-top:14px;max-width:320px">
+        <label>Admin Password</label>
+        <input class="fi" id="as-pw" type="password" placeholder="Leave blank to keep current"/>
+        <div class="fi-hint">Current: saved in your browser. Default: <code>worldcup2026</code></div>
+      </div>
+      <div id="as-msg" style="margin-top:8px"></div>
+      <button class="btn btn-primary btn-sm" style="margin-top:4px" onclick="saveAdminSettings()">💾 Save Settings</button>
     </div>`;
 
   loadAdminSubs();
@@ -1387,6 +1411,23 @@ async function saveAdminResults(){
     msg.innerHTML=`<div class="alert alert-error">Error: ${esc(e.message)}</div>`;
     btn.disabled=false; btn.innerHTML='💾 Save Group + Final Results &amp; Recalculate';
   }
+}
+
+function saveAdminSettings(){
+  const url=document.getElementById('as-url').value.trim();
+  const key=document.getElementById('as-key').value.trim();
+  const pw=document.getElementById('as-pw').value.trim();
+  const msg=document.getElementById('as-msg');
+  if(!url||!key){msg.innerHTML=`<div class="alert alert-error">URL and key are required.</div>`;return}
+  if(!url.startsWith('https://')){msg.innerHTML=`<div class="alert alert-error">URL must start with https://</div>`;return}
+  try{
+    db=window.supabase.createClient(url,key);
+    demoMode=false;
+    localStorage.setItem('wc26_url',url);
+    localStorage.setItem('wc26_key',key);
+    if(pw) localStorage.setItem('wc26_pw',pw);
+    msg.innerHTML=`<div class="alert alert-success">✅ Settings saved.</div>`;
+  }catch(e){msg.innerHTML=`<div class="alert alert-error">Failed: ${esc(e.message)}</div>`}
 }
 
 async function loadAdminSubs(){
