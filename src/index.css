@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif; }
+  body { @apply bg-gray-50 text-gray-900 antialiased; }
+}
